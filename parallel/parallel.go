@@ -21,6 +21,7 @@ func SyncDispatcher[I any, O any](
 	for _, in := range inputData {
 		input <- in
 	}
+
 	close(input)
 
 	results := make(chan O, min(workerCount, len(inputData)))
@@ -65,6 +66,7 @@ func SyncDispatcher2[I any, O any](
 	for _, in := range inputData {
 		input <- in
 	}
+
 	close(input)
 
 	done := make(chan struct{})
@@ -82,6 +84,7 @@ func SyncDispatcher2[I any, O any](
 				default:
 					result, err := f(in)
 					results <- result
+
 					errors <- err
 				}
 			}
