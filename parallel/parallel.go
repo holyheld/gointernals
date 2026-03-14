@@ -63,19 +63,24 @@ func ExecutePool2[I any, O any](
 	f func(task I) (O, error),
 	workerCount int,
 ) ([]O, error) {
-	return executePool2(typeutil.ChanSlice(tasks), f, workerCount)
+	return executePool2(typeutil.ChanSlice(tasks), f, workerCount, len(tasks))
 }
 
 func executePool2[I any, O any](
 	tasks <-chan I,
 	f func(task I) (O, error),
 	workerCount int,
+	length int,
 ) ([]O, error) {
 	done := make(chan struct{})
 	defer close(done)
 
-	results := make(chan O, min(workerCount, len(tasks)))
-	errors := make(chan error, workerCount)
+	type resultHolder struct {
+		Data  O
+		Error error
+	}
+
+	results := make(chan resultHolder, length)
 
 	var wg sync.WaitGroup
 	for range workerCount {
@@ -86,12 +91,9 @@ func executePool2[I any, O any](
 					return
 				default:
 					result, err := f(in)
-					results <- result
-
-					errors <- err
-
-					if err != nil {
-						return
+					results <- resultHolder{
+						Data:  result,
+						Error: err,
 					}
 				}
 			}
@@ -101,18 +103,16 @@ func executePool2[I any, O any](
 	go func() {
 		wg.Wait()
 		close(results)
-		close(errors)
 	}()
 
-	for err := range errors {
-		if err != nil {
-			return nil, err
-		}
-	}
+	resultData := make([]O, 0, length)
 
-	resultData := make([]O, 0, len(tasks))
 	for result := range results {
-		resultData = append(resultData, result)
+		if result.Error != nil {
+			return nil, result.Error
+		}
+
+		resultData = append(resultData, result.Data)
 	}
 
 	return resultData, nil
@@ -138,16 +138,19 @@ func ExecuteChunkSync[I any, O any](
 	return res, nil
 }
 
-// ExecuteChunkAsync executes provided data in chunks synchronously.
+// ExecuteChunkAsync executes provided data in chunks with pool workers.
 func ExecuteChunkAsync[I any, O any](
 	tasks []I,
 	chunkSize int,
 	f func(chunk []I) ([]O, error),
 	workerCount int,
 ) ([]O, error) {
-	chunks := typeutil.ChanSeq(slices.Chunk(tasks, chunkSize))
+	chunks := typeutil.ChanSeqSized(
+		slices.Chunk(tasks, chunkSize),
+		typeutil.DivUp(len(tasks), chunkSize),
+	)
 
-	resChunk, err := executePool2(chunks, f, workerCount)
+	resChunk, err := executePool2(chunks, f, workerCount, len(tasks))
 	if err != nil {
 		return nil, err
 	}

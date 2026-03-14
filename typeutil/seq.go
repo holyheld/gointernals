@@ -25,8 +25,21 @@ func DeduplicateSeq[T comparable](seq iter.Seq[T]) iter.Seq[T] {
 }
 
 // ChanSeq accepts iterator sequence and returns the channel representation of it.
+//
+// Keep in mind that the channel is unbuffered, so can lead to deadlocks if routine
+// is unable to read from it due to external locks.
 func ChanSeq[T any](seq iter.Seq[T]) <-chan T {
-	c := make(chan T)
+	return chanSeq(seq, 0)
+}
+
+// ChanSeqSized accepts iterator sequence and channel size, and returns
+// the channel representation of iterator.
+func ChanSeqSized[T any](seq iter.Seq[T], size int) <-chan T {
+	return chanSeq(seq, size)
+}
+
+func chanSeq[T any](seq iter.Seq[T], size int) <-chan T {
+	c := make(chan T, size)
 
 	go func() {
 		defer close(c)
