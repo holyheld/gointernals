@@ -5,34 +5,59 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"time"
 
-	"cloud.google.com/go/storage"
+	gostorage "cloud.google.com/go/storage"
+	"github.com/holyheld/gointernals/storage"
 )
 
 // Storage is a storage wrapper struct exposing methods that are useful for
 // the caller.
 type Storage struct {
-	client    *storage.Client
-	handle    *storage.BucketHandle
+	client    *gostorage.Client
+	handle    *gostorage.BucketHandle
 	timeout   time.Duration
 	chunkSize *int
 }
 
-func NewBucket(ctx context.Context, name string) (*Storage, error) {
-	client, err := storage.NewClient(ctx)
+var _ storage.Storage = (*Storage)(nil)
+
+// WithTimeout sets the timeout limit on inner contexts to prevent
+// long requests from bloating goroutines scheduler.
+func WithTimeout(timeout time.Duration) func(*Storage) {
+	return func(s *Storage) {
+		s.timeout = timeout
+	}
+}
+
+// WithChunkSize limits the maximum chunk size used by storage.Writer
+//
+// Note that retries are not supported for chunk size 0.
+func WithChunkSize(size int) func(*Storage) {
+	return func(s *Storage) {
+		s.chunkSize = &size
+	}
+}
+
+func NewBucket(ctx context.Context, name string, opts ...func(*Storage)) (*Storage, error) {
+	client, err := gostorage.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
 	handle := client.Bucket(name)
 
-	return &Storage{
+	s := &Storage{
 		client:  client,
 		handle:  handle,
 		timeout: time.Second * 30,
-	}, nil
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	return s, nil
 }
 
 // Close closes the inner client
@@ -45,23 +70,6 @@ func (s *Storage) Close() error {
 	}
 
 	return nil
-}
-
-// WithTimeout sets the timeout limit on inner contexts to prevent
-// long requests from bloating goroutines scheduler.
-func (s *Storage) WithTimeout(timeout time.Duration) *Storage {
-	s.timeout = timeout
-
-	return s
-}
-
-// WithChunkSize limits the maximum chunk size used by storage.Writer
-//
-// Note that retries are not supported for chunk size 0.
-func (s *Storage) WithChunkSize(size int) *Storage {
-	s.chunkSize = &size
-
-	return s
 }
 
 // DownloadFileReader creates full file download reader.
@@ -92,7 +100,7 @@ func (s *Storage) DownloadRangeReader(
 	return s.downloadRangeReader(ctx, name, offset, length)
 }
 
-// Downloader returns [io.ReadSeeker] which internally uses [Storage.DownloadRangeReader].
+// Downloader creates [io.ReadSeeker].
 //
 // Useful for serving files where full content download ahead of time is expensive
 // (e.g. with [http.ServeContent]).
@@ -129,7 +137,12 @@ func (s *Storage) UploadFile(ctx context.Context, name string, r io.Reader) erro
 	return nil
 }
 
-func (s *Storage) UpdateFile(ctx context.Context, name string, attrs UpdateAttributes) error {
+// UpdateFile updates object attributes.
+func (s *Storage) UpdateFile(
+	ctx context.Context,
+	name string,
+	attrs storage.UpdateAttributes,
+) error {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -139,7 +152,7 @@ func (s *Storage) UpdateFile(ctx context.Context, name string, attrs UpdateAttri
 	}
 
 	_, err := s.handle.Object(name).Update(
-		ctx, storage.ObjectAttrsToUpdate{
+		ctx, gostorage.ObjectAttrsToUpdate{
 			Metadata:    meta,
 			ContentType: attrs.ContentType,
 		},
@@ -151,7 +164,7 @@ func (s *Storage) UpdateFile(ctx context.Context, name string, attrs UpdateAttri
 	return nil
 }
 
-func (s *Storage) Attributes(ctx context.Context, name string) (*ObjectAttributes, error) {
+func (s *Storage) Attributes(ctx context.Context, name string) (*storage.ObjectAttributes, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -171,7 +184,7 @@ func (s *Storage) Attributes(ctx context.Context, name string) (*ObjectAttribute
 		}
 	}
 
-	return &ObjectAttributes{
+	return &storage.ObjectAttributes{
 		ETag:           attrs.Etag,
 		ExpirationTime: exp,
 		UpdatedTime:    attrs.Updated,
@@ -190,35 +203,6 @@ func (s *Storage) DeleteFile(ctx context.Context, name string) error {
 	return nil
 }
 
-// DownloadByURLThenUpload performs a file download with default client, then uploads result
-// to specified location in bucket.
-func (s *Storage) DownloadByURLThenUpload(ctx context.Context, url string, name string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to build request to download: %w", err)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to download file: %w", err)
-	}
-
-	if resp.StatusCode < 199 || resp.StatusCode > 299 {
-		return fmt.Errorf("non-ok status: %d", resp.StatusCode)
-	}
-
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	err = s.UploadFile(ctx, name, resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to upload file: %w", err)
-	}
-
-	return nil
-}
-
 func (s *Storage) downloadRangeReader(
 	ctx context.Context,
 	name string,
@@ -229,8 +213,8 @@ func (s *Storage) downloadRangeReader(
 
 	r, err := objectHandle.NewRangeReader(ctx, offset, length)
 	if err != nil {
-		if errors.Is(err, storage.ErrObjectNotExist) {
-			return nil, ErrNoSuchFile
+		if errors.Is(err, gostorage.ErrObjectNotExist) {
+			return nil, storage.ErrNoSuchFile
 		}
 
 		return nil, fmt.Errorf("failed to create reader on object: %w", err)

@@ -1,4 +1,4 @@
-package gcloudstorage
+package storage
 
 import (
 	"errors"
