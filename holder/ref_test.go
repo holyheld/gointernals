@@ -3,7 +3,7 @@ package holder_test
 import (
 	"testing"
 
-	"github.com/holyheld/holder"
+	holder "github.com/holyheld/gointernals/holder"
 )
 
 func TestRefHolder(t *testing.T) {

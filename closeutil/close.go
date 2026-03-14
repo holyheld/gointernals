@@ -5,7 +5,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/holyheld/slogutil"
+	slogutil "github.com/holyheld/gointernals/slogutil"
 )
 
 // CloseOrLog is an util function that calls [io.Closer.Close] method on provided closer

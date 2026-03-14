@@ -5,7 +5,7 @@ import (
 	"errors"
 	"io"
 
-	"github.com/holyheld/closeutil"
+	closeutil "github.com/holyheld/gointernals/closeutil"
 )
 
 type gcsReadSeeker struct {

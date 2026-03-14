@@ -3,7 +3,7 @@ package slogutil_test
 import (
 	"testing"
 
-	"github.com/holyheld/slogutil"
+	slogutil "github.com/holyheld/gointernals/slogutil"
 )
 
 func TestStringLike(t *testing.T) {

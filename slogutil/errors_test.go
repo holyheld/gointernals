@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/holyheld/slogutil"
+	slogutil "github.com/holyheld/gointernals/slogutil"
 )
 
 func TestRecover(t *testing.T) {

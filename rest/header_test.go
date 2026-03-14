@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/holyheld/rest"
+	rest "github.com/holyheld/gointernals/rest"
 )
 
 func TestCopyHeader(t *testing.T) {

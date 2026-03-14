@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/holyheld/holder"
-	"github.com/holyheld/rest"
+	"github.com/holyheld/gointernals/holder"
+	"github.com/holyheld/gointernals/rest"
 )
 
 type Client struct {

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
-	"github.com/holyheld/pool"
+	pool "github.com/holyheld/gointernals/pool"
 )
 
 var sharedTransport = &http.Transport{

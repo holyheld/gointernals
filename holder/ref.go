@@ -1,6 +1,6 @@
 package holder
 
-import "github.com/holyheld/ref"
+import ref "github.com/holyheld/gointernals/ref"
 
 type refHolder[T any] struct {
 	ref *T

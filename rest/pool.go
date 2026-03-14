@@ -1,7 +1,7 @@
 package rest
 
 import (
-	"github.com/holyheld/pool"
+	pool "github.com/holyheld/gointernals/pool"
 )
 
 const (

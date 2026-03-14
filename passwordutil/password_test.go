@@ -3,7 +3,7 @@ package passwordutil_test
 import (
 	"testing"
 
-	"github.com/holyheld/passwordutil"
+	passwordutil "github.com/holyheld/gointernals/passwordutil"
 )
 
 func TestPasswordHashing(t *testing.T) {
