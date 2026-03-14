@@ -92,7 +92,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version-file: "${{ github.workspace }}/.tool-versions"
+          version: "2.9.0"
           working-directory: ${{ matrix.modules }}
 
   release:
