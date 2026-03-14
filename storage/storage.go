@@ -6,6 +6,7 @@ import (
 )
 
 type Storage interface {
+	io.Closer
 	// DownloadFileReader creates full file download reader.
 	DownloadFileReader(ctx context.Context, name string) (io.ReadCloser, error)
 
