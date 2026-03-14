@@ -1,0 +1,16 @@
+go 1.25.7
+
+use (
+  ./closeutil
+	./currency
+	./gcloudstorage
+	./holder
+	./holyapi
+	./parallel
+	./passwordutil
+	./pool
+	./ref
+	./rest
+	./slogutil
+	./typeutil
+)

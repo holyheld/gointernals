@@ -1,0 +1,90 @@
+name: Go Monorepo CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      module:
+        description: "Module to release"
+        required: true
+        type: choice
+        options: [currency, holder, pool, ref, rest, slogutil]
+      version:
+        description: "Version (e.g., v1.0.0)"
+        required: true
+        type: string
+
+jobs:
+  test:
+    name: Run All Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.work"
+
+      - name: Test All Modules
+        run: |
+          # Extract module paths from go.work and run tests for each
+          MODULES=$(go work edit -json | jq -r '.Use[].DiskPath')
+          for dir in $MODULES; do
+            echo "::group::Testing $dir"
+            go test -v "$dir/..."
+            echo "::endgroup::"
+          done
+
+  detect-modules:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.set-modules.outputs.modules }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.work"
+
+      - id: set-modules
+        run: echo "modules=$(go list -m -json | jq -s '.' | jq -c '[.[].Dir]')" >> $GITHUB_OUTPUT
+
+  golangci:
+    name: Lint with golangci
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        modules: ${{ fromJSON(needs.detect-modules.outputs.modules) }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version-file: .tool-versions
+          working-directory: ${{ matrix.modules }}
+
+  release:
+    name: Tag Release
+    if: github.event_name == 'workflow_dispatch'
+    needs: [test, golangci]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create and Push Tag
+        run: |
+          TAG_NAME="${{ github.event.inputs.module }}/${{ github.event.inputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag $TAG_NAME
+          git push origin $TAG_NAME

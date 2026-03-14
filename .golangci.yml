@@ -1,0 +1,109 @@
+version: "2"
+
+run:
+  timeout: 5m
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - decorder
+    - dupword
+    - durationcheck
+    - embeddedstructfieldcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exptostd
+    - fatcontext
+    - forcetypeassert
+    - funcorder
+    - goconst
+    - gocritic
+    - godoclint
+    - godot
+    - gosec
+    - govet
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - ineffassign
+    - intrange
+    - iotamixing
+    - lll
+    - loggercheck
+    - makezero
+    - mirror
+    - misspell
+    - modernize
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - nlreturn
+    - noctx
+    - noinlineerr
+    - nolintlint
+    - nonamedreturns
+    - nosprintfhostport
+    - paralleltest
+    - perfsprint
+    - prealloc
+    - predeclared
+    - reassign
+    - recvcheck
+    - revive
+    - sloglint
+    - staticcheck
+    - tagalign
+    - testpackage
+    - thelper
+    - tparallel
+    - unconvert
+    - unused
+    - unparam
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+    - wsl_v5
+  settings:
+    revive:
+      enable-all-rules: false
+      enable-default-rules: true
+      rules:
+        - name: exported
+          disabled: true
+    lll:
+      line-length: 100
+    sloglint:
+      context: scope
+      no-mixed-args: true
+      static-msg: true
+      attr-only: true
+      args-on-sep-lines: true
+    loggercheck:
+      slog: true
+      no-printf-like: true
+    usestdlibvars:
+      time-date-month: true
+      time-month: true
+      time-layout: true
+      crypto-hash: true
+      default-rpc-path: true
+      sql-isolation-level: true
+      tls-signature-scheme: true
+      constant-kind: true
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines

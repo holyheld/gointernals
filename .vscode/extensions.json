@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "editorconfig.editorconfig",
+        "github.vscode-github-actions",
+        "golang.go",
+        "fogio.inline-go-struct-tags-syntax-highlight"
+    ]
+}
