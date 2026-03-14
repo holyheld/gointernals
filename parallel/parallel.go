@@ -1,35 +1,38 @@
 package parallel
 
 import (
+	"slices"
 	"sync"
+
+	"github.com/holyheld/gointernals/typeutil"
 )
 
-// SyncDispatcher is a convenience helper that distributes input tasks into
-// workerCount runners then collects the result.
+// ExecutePool is a convenience helper that distributes input tasks into
+// workerCount workers then collects the result.
 //
 // Output values are not expected to have the same order as they came in.
 //
 // Panics when provided executor panics.
-func SyncDispatcher[I any, O any](
-	inputData []I,
-	f func(input I) O,
+func ExecutePool[I any, O any](
+	tasks []I,
+	f func(task I) O,
 	workerCount int,
 ) []O {
-	var wg sync.WaitGroup
+	return executePool(typeutil.ChanSlice(tasks), f, workerCount)
+}
 
-	input := make(chan I, len(inputData))
-	for _, in := range inputData {
-		input <- in
-	}
+func executePool[I any, O any](
+	tasks <-chan I,
+	f func(task I) O,
+	workerCount int,
+) []O {
+	results := make(chan O, min(workerCount, len(tasks)))
 
-	close(input)
-
-	results := make(chan O, min(workerCount, len(inputData)))
-	// Start workers
+	wg := sync.WaitGroup{}
 	for range workerCount {
 		wg.Go(func() {
-			for in := range input {
-				result := f(in)
+			for task := range tasks {
+				result := f(task)
 				results <- result
 			}
 		})
@@ -40,7 +43,7 @@ func SyncDispatcher[I any, O any](
 		close(results)
 	}()
 
-	resultData := make([]O, 0, len(inputData))
+	resultData := make([]O, 0, len(tasks))
 	for result := range results {
 		resultData = append(resultData, result)
 	}
@@ -48,36 +51,36 @@ func SyncDispatcher[I any, O any](
 	return resultData
 }
 
-// SyncDispatcher2 is a convenience helper that distributes input tasks into
+// ExecutePool2 is a convenience helper that distributes input tasks into
 // workerCount runners then collects the result.
 //
 // Output values are not expected to have the same order as they came in.
 //
 // Fails when either of workers fails with nil res and error, otherwise error is nil
 // and the result is OK.
-func SyncDispatcher2[I any, O any](
-	inputData []I,
-	f func(input I) (O, error),
+func ExecutePool2[I any, O any](
+	tasks []I,
+	f func(task I) (O, error),
 	workerCount int,
 ) ([]O, error) {
-	var wg sync.WaitGroup
+	return executePool2(typeutil.ChanSlice(tasks), f, workerCount)
+}
 
-	input := make(chan I, len(inputData))
-	for _, in := range inputData {
-		input <- in
-	}
-
-	close(input)
-
+func executePool2[I any, O any](
+	tasks <-chan I,
+	f func(task I) (O, error),
+	workerCount int,
+) ([]O, error) {
 	done := make(chan struct{})
 	defer close(done)
 
-	results := make(chan O, min(workerCount, len(inputData)))
+	results := make(chan O, min(workerCount, len(tasks)))
 	errors := make(chan error, workerCount)
-	// Start workers
+
+	var wg sync.WaitGroup
 	for range workerCount {
 		wg.Go(func() {
-			for in := range input {
+			for in := range tasks {
 				select {
 				case <-done:
 					return
@@ -86,6 +89,10 @@ func SyncDispatcher2[I any, O any](
 					results <- result
 
 					errors <- err
+
+					if err != nil {
+						return
+					}
 				}
 			}
 		})
@@ -103,10 +110,52 @@ func SyncDispatcher2[I any, O any](
 		}
 	}
 
-	resultData := make([]O, 0, len(inputData))
+	resultData := make([]O, 0, len(tasks))
 	for result := range results {
 		resultData = append(resultData, result)
 	}
 
 	return resultData, nil
+}
+
+// ExecuteChunkSync executes provided function over tasks in chunks synchronously.
+func ExecuteChunkSync[I any, O any](
+	tasks []I,
+	chunkSize int,
+	f func(chunk []I) ([]O, error),
+) ([]O, error) {
+	res := make([]O, 0, typeutil.DivUp(len(tasks), chunkSize))
+
+	for chunk := range slices.Chunk(tasks, chunkSize) {
+		batchRes, err := f(chunk)
+		if err != nil {
+			return nil, err
+		}
+
+		res = append(res, batchRes...)
+	}
+
+	return res, nil
+}
+
+// ExecuteChunkAsync executes provided data in chunks synchronously.
+func ExecuteChunkAsync[I any, O any](
+	tasks []I,
+	chunkSize int,
+	f func(chunk []I) ([]O, error),
+	workerCount int,
+) ([]O, error) {
+	chunks := typeutil.ChanSeq(slices.Chunk(tasks, chunkSize))
+
+	resChunk, err := executePool2(chunks, f, workerCount)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]O, 0, len(tasks))
+	for _, chunk := range resChunk {
+		res = append(res, chunk...)
+	}
+
+	return res, nil
 }
