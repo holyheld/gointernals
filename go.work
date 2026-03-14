@@ -1,8 +1,9 @@
 go 1.25.7
 
 use (
-  ./closeutil
+	./closeutil
 	./currency
+	./gcloudsecrets
 	./gcloudstorage
 	./holder
 	./holyapi

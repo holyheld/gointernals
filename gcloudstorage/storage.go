@@ -8,20 +8,20 @@ import (
 	"net/http"
 	"time"
 
-	gostorage "cloud.google.com/go/storage"
+	"cloud.google.com/go/storage"
 )
 
 // Storage is a storage wrapper struct exposing methods that are useful for
 // the caller.
 type Storage struct {
-	client    *gostorage.Client
-	handle    *gostorage.BucketHandle
+	client    *storage.Client
+	handle    *storage.BucketHandle
 	timeout   time.Duration
 	chunkSize *int
 }
 
 func NewBucket(ctx context.Context, name string) (*Storage, error) {
-	client, err := gostorage.NewClient(ctx)
+	client, err := storage.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
@@ -139,7 +139,7 @@ func (s *Storage) UpdateFile(ctx context.Context, name string, attrs UpdateAttri
 	}
 
 	_, err := s.handle.Object(name).Update(
-		ctx, gostorage.ObjectAttrsToUpdate{
+		ctx, storage.ObjectAttrsToUpdate{
 			Metadata:    meta,
 			ContentType: attrs.ContentType,
 		},
@@ -207,7 +207,9 @@ func (s *Storage) DownloadByURLThenUpload(ctx context.Context, url string, name 
 		return fmt.Errorf("non-ok status: %d", resp.StatusCode)
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	err = s.UploadFile(ctx, name, resp.Body)
 	if err != nil {
@@ -227,7 +229,7 @@ func (s *Storage) downloadRangeReader(
 
 	r, err := objectHandle.NewRangeReader(ctx, offset, length)
 	if err != nil {
-		if errors.Is(err, gostorage.ErrObjectNotExist) {
+		if errors.Is(err, storage.ErrObjectNotExist) {
 			return nil, ErrNoSuchFile
 		}
 
