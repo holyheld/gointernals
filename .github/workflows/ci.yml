@@ -48,6 +48,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: [test, golangci]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Create and Push Tag
