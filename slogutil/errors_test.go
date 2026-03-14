@@ -17,17 +17,17 @@ func TestRecover(t *testing.T) {
 	}{
 		{
 			name: "string value",
-			r:    generatePanic(t, "value"),
+			r:    "value",
 			want: "recover=value",
 		},
 		{
 			name: "error value",
-			r:    generatePanic(t, errors.New("value")),
+			r:    errors.New("value"),
 			want: "recover=[message=value]",
 		},
 		{
 			name: "other value",
-			r:    generatePanic(t, 42),
+			r:    42,
 			want: "recover=42",
 		},
 	}
@@ -41,13 +41,4 @@ func TestRecover(t *testing.T) {
 			}
 		})
 	}
-}
-
-func generatePanic(t *testing.T, value any) (res any) {
-	t.Helper()
-
-	defer func() {
-		res = recover()
-	}()
-	panic(value)
 }

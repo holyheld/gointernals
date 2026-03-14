@@ -9,11 +9,12 @@ import (
 func TestStringLike(t *testing.T) {
 	t.Parallel()
 
+	const expected = "key=value"
+
 	t.Run("regular string", func(t *testing.T) {
 		t.Parallel()
 
 		got := slogutil.StringLike("key", "value")
-		expected := "key=value"
 
 		if got.String() != expected {
 			t.Errorf("StringLike() want %s got %s", expected, got)
@@ -26,7 +27,6 @@ func TestStringLike(t *testing.T) {
 		v := stringLikeValue("value")
 
 		got := slogutil.StringLike("key", v)
-		expected := "key=value"
 
 		if got.String() != expected {
 			t.Errorf("StringLike() want %s got %s", expected, got)
@@ -39,7 +39,6 @@ func TestStringLike(t *testing.T) {
 		v := stringerValue{}
 
 		got := slogutil.StringLike("key", v)
-		expected := "key=value"
 
 		if got.String() != expected {
 			t.Errorf("StringLike() want %s got %s", expected, got)
@@ -49,10 +48,9 @@ func TestStringLike(t *testing.T) {
 	t.Run("fmt.Stringer ptr value", func(t *testing.T) {
 		t.Parallel()
 
-		v := &stringerValue{}
+		v := &stringerPtrValue{}
 
 		got := slogutil.StringLike("key", v)
-		expected := "key=value"
 
 		if got.String() != expected {
 			t.Errorf("StringLike() want %s got %s", expected, got)
@@ -65,7 +63,6 @@ func TestStringLike(t *testing.T) {
 		v := goStringerValue{}
 
 		got := slogutil.StringLike("key", v)
-		expected := "key=value"
 
 		if got.String() != expected {
 			t.Errorf("StringLike() want %s got %s", expected, got)
@@ -78,7 +75,6 @@ func TestStringLike(t *testing.T) {
 		v := &goStringerPtrValue{}
 
 		got := slogutil.StringLike("key", v)
-		expected := "key=value"
 
 		if got.String() != expected {
 			t.Errorf("StringLike() want %s got %s", expected, got)
@@ -86,28 +82,30 @@ func TestStringLike(t *testing.T) {
 	})
 }
 
+const returnValue = "value"
+
 type stringLikeValue string
 
 type stringerValue struct{}
 
 func (v stringerValue) String() string {
-	return "value"
+	return returnValue
 }
 
 type goStringerValue struct{}
 
 func (v goStringerValue) GoString() string {
-	return "value"
+	return returnValue
 }
 
 type stringerPtrValue struct{}
 
 func (v *stringerPtrValue) String() string {
-	return "value"
+	return returnValue
 }
 
 type goStringerPtrValue struct{}
 
 func (v *goStringerPtrValue) GoString() string {
-	return "value"
+	return returnValue
 }
