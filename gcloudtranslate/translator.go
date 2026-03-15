@@ -122,7 +122,7 @@ func (t *Translator) translate(
 ) ([]translation.TranslatedText, error) {
 	options := &translatepb.TranslateTextRequest{
 		Contents:           texts,
-		TargetLanguageCode: translation.BCP47ToISO639(to),
+		TargetLanguageCode: to.String(),
 		Parent:             t.parent,
 		MimeType:           "text/plain",
 	}
@@ -130,7 +130,7 @@ func (t *Translator) translate(
 	var fromLanguage language.Tag
 
 	if from != nil {
-		options.SourceLanguageCode = translation.BCP47ToISO639(*from)
+		options.SourceLanguageCode = from.String()
 		fromLanguage = *from
 	}
 
