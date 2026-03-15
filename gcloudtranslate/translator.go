@@ -14,30 +14,52 @@ import (
 type Translator struct {
 	defaultToLang *language.Tag
 	client        *translate.TranslationClient
+	projectID     string
+	parent        string
 }
 
 var _ translation.Translator = (*Translator)(nil)
 
-func WithDefaultToLang(lang language.Tag) func(*Translator) {
+type Option func(*Translator)
+
+func WithDefaultToLang(lang language.Tag) Option {
 	return func(t *Translator) {
 		t.defaultToLang = &lang
 	}
 }
 
-func WithClient(cli *translate.TranslationClient) func(*Translator) {
+func WithClient(cli *translate.TranslationClient) Option {
 	return func(t *Translator) {
 		t.client = cli
 	}
 }
 
-func NewModule(ctx context.Context, opts ...func(*Translator)) (*Translator, error) {
+const locationIDGlobal = "global"
+
+func getParent(projectID string, location string) string {
+	return "projects/" + projectID + "locations/" + location
+}
+
+func WithLocationParent(locationID string) Option {
+	return func(t *Translator) {
+		t.parent = getParent(t.projectID, locationID)
+	}
+}
+
+func NewModule(
+	ctx context.Context,
+	projectID string,
+	opts ...func(*Translator),
+) (*Translator, error) {
 	client, err := translate.NewTranslationClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new client: %w", err)
 	}
 
 	t := &Translator{
-		client: client,
+		client:    client,
+		projectID: projectID,
+		parent:    getParent(projectID, locationIDGlobal),
 	}
 
 	for _, opt := range opts {
@@ -100,13 +122,15 @@ func (t *Translator) translate(
 ) ([]translation.TranslatedText, error) {
 	options := &translatepb.TranslateTextRequest{
 		Contents:           texts,
-		TargetLanguageCode: to.String(),
+		TargetLanguageCode: translation.BCP47ToISO639(to),
+		Parent:             t.parent,
+		MimeType:           "text/plain",
 	}
 
 	var fromLanguage language.Tag
 
 	if from != nil {
-		options.SourceLanguageCode = from.String()
+		options.SourceLanguageCode = translation.BCP47ToISO639(*from)
 		fromLanguage = *from
 	}
 
