@@ -37,7 +37,7 @@ func WithClient(cli *translate.TranslationClient) Option {
 const locationIDGlobal = "global"
 
 func getParent(projectID string, location string) string {
-	return "projects/" + projectID + "locations/" + location
+	return "projects/" + projectID + "/locations/" + location
 }
 
 func WithLocationParent(locationID string) Option {
