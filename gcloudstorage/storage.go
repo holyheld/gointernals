@@ -22,9 +22,11 @@ type Storage struct {
 
 var _ storage.Storage = (*Storage)(nil)
 
+type Option func(*Storage)
+
 // WithTimeout sets the timeout limit on inner contexts to prevent
 // long requests from bloating goroutines scheduler.
-func WithTimeout(timeout time.Duration) func(*Storage) {
+func WithTimeout(timeout time.Duration) Option {
 	return func(s *Storage) {
 		s.timeout = timeout
 	}
@@ -33,13 +35,13 @@ func WithTimeout(timeout time.Duration) func(*Storage) {
 // WithChunkSize limits the maximum chunk size used by storage.Writer
 //
 // Note that retries are not supported for chunk size 0.
-func WithChunkSize(size int) func(*Storage) {
+func WithChunkSize(size int) Option {
 	return func(s *Storage) {
 		s.chunkSize = &size
 	}
 }
 
-func NewBucket(ctx context.Context, name string, opts ...func(*Storage)) (*Storage, error) {
+func NewBucket(ctx context.Context, name string, opts ...Option) (*Storage, error) {
 	client, err := gostorage.NewClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client: %w", err)

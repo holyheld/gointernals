@@ -49,7 +49,7 @@ func WithLocationParent(locationID string) Option {
 func NewModule(
 	ctx context.Context,
 	projectID string,
-	opts ...func(*Translator),
+	opts ...Option,
 ) (*Translator, error) {
 	client, err := translate.NewTranslationClient(ctx)
 	if err != nil {
