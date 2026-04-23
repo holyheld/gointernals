@@ -9,18 +9,36 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/hashicorp/go-cleanhttp"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/holyheld/gointernals/holder"
 	"github.com/holyheld/gointernals/rest"
 )
 
 type Client struct {
-	baseURL holder.Holder[string]
+	baseURL    holder.Holder[string]
+	httpClient *http.Client
 }
 
-func NewClient(baseURL holder.Holder[string]) *Client {
-	return &Client{
-		baseURL: baseURL,
+type Option func(*Client)
+
+func WithClient(c *http.Client) Option {
+	return func(o *Client) {
+		o.httpClient = c
 	}
+}
+
+func NewClient(baseURL holder.Holder[string], opts ...Option) *Client {
+	c := &Client{
+		baseURL:    baseURL,
+		httpClient: cleanhttp.DefaultPooledClient(),
+	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c
 }
 
 func (c *Client) Request(
@@ -31,15 +49,13 @@ func (c *Client) Request(
 	body any,
 	successResponse any,
 ) (int, error) {
-	return c.RequestWithRetry(
+	return c.requestInternal(
 		ctx,
 		method,
 		path,
-		header,
 		body,
 		successResponse,
-		0,
-		nil,
+		rest.WithHeaders(header),
 	)
 }
 
@@ -51,7 +67,38 @@ func (c *Client) RequestWithRetry(
 	body any,
 	successResponse any,
 	retries int,
-	checkRetry func(ctx context.Context, resp *http.Response, err error) (bool, error),
+	checkRetry retryablehttp.CheckRetry,
+) (int, error) {
+	return c.requestInternal(
+		ctx,
+		method,
+		path,
+		body,
+		successResponse,
+		rest.WithHeaders(header),
+		rest.WithRetries(retries),
+		rest.WithCheckRetry(checkRetry),
+	)
+}
+
+func (c *Client) RequestWithOptions(
+	ctx context.Context,
+	method string,
+	path string,
+	body any,
+	successResponse any,
+	opts ...rest.RequestOption,
+) (int, error) {
+	return c.requestInternal(ctx, method, path, body, successResponse, opts...)
+}
+
+func (c *Client) requestInternal(
+	ctx context.Context,
+	method string,
+	path string,
+	body any,
+	successResponse any,
+	opts ...rest.RequestOption,
 ) (int, error) {
 	successResp := &ResponseSuccess{Payload: successResponse}
 	if successResponse == nil {
@@ -73,16 +120,19 @@ func (c *Client) RequestWithRetry(
 		return 0, fmt.Errorf("failed to parse path url (raw=%s): %w", path, err)
 	}
 
-	status, err := rest.JSONRequestAdvancedCustom(
+	allOpts := make([]rest.RequestOption, 0, len(opts)+2)
+	allOpts = append(allOpts, rest.WithClient(c.httpClient))
+	allOpts = append(allOpts, opts...)
+	allOpts = append(allOpts, rest.WithAdditionalHeaders(prepareHeader(ctx)))
+
+	status, err := rest.JSONRequest(
 		ctx,
 		method,
 		pathURL.String(),
-		prepareHeader(ctx, header),
 		body,
 		successResp,
 		errorResp,
-		retries,
-		checkRetry,
+		allOpts...,
 	)
 	if err != nil {
 		return status, err
@@ -113,14 +163,11 @@ func (c *Client) RequestWithRetry(
 	return status, nil
 }
 
-func prepareHeader(ctx context.Context, h http.Header) http.Header {
-	out := h.Clone()
-	if out == nil {
-		out = make(http.Header)
-	}
+func prepareHeader(ctx context.Context) http.Header {
+	out := make(http.Header, 2)
 
 	if via := ExtractVia(ctx); via != "" {
-		out.Add("Via", via)
+		out.Set("Via", via)
 	}
 
 	if ua := ExtractUserAgent(ctx); ua != "" {

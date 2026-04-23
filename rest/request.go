@@ -4,58 +4,105 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"time"
 
+	"github.com/hashicorp/go-cleanhttp"
 	"github.com/hashicorp/go-retryablehttp"
-	pool "github.com/holyheld/gointernals/pool"
+	"github.com/holyheld/gointernals/pool"
 )
 
-var sharedTransport = &http.Transport{
-	MaxIdleConns:        1000,
-	MaxIdleConnsPerHost: 100,
-	IdleConnTimeout:     90 * time.Second,
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
+type requestOptions struct {
+	Client     *http.Client
+	Retries    int
+	CheckRetry retryablehttp.CheckRetry
+	Headers    http.Header
+	Encoder    Encoder
+	Decoder    Decoder
 }
 
-func getClient(retries int, checkRetry retryablehttp.CheckRetry) *http.Client {
-	if retries <= 0 {
-		return &http.Client{
-			Transport: sharedTransport,
-			Timeout:   90 * time.Second,
-		}
-	}
+type RequestOption func(*requestOptions)
 
+func WithClient(c *http.Client) RequestOption {
+	return func(o *requestOptions) { o.Client = c }
+}
+
+func WithRetries(r int) RequestOption {
+	return func(o *requestOptions) { o.Retries = r }
+}
+
+func WithCheckRetry(cr retryablehttp.CheckRetry) RequestOption {
+	return func(o *requestOptions) { o.CheckRetry = cr }
+}
+
+func WithHeaders(h http.Header) RequestOption {
+	return func(o *requestOptions) { o.Headers = h }
+}
+
+func WithAdditionalHeaders(h http.Header) RequestOption {
+	return func(o *requestOptions) {
+		if o.Headers == nil {
+			o.Headers = make(http.Header)
+		}
+
+		CopyHeader(&o.Headers, h)
+	}
+}
+
+func WithSerializer(s Serializer) RequestOption {
+	return func(o *requestOptions) {
+		o.Encoder = s
+		o.Decoder = s
+	}
+}
+
+func WithEncoder(e Encoder) RequestOption {
+	return func(o *requestOptions) {
+		o.Encoder = e
+	}
+}
+
+func WithDecoder(d Decoder) RequestOption {
+	return func(o *requestOptions) {
+		o.Decoder = d
+	}
+}
+
+func buildClient(opts *requestOptions) *retryablehttp.Client {
 	retryClient := retryablehttp.NewClient()
-	if checkRetry == nil {
-		retryClient.CheckRetry = retryablehttp.DefaultRetryPolicy
-	} else {
-		retryClient.CheckRetry = checkRetry
+	if opts.CheckRetry != nil {
+		retryClient.CheckRetry = opts.CheckRetry
 	}
 
 	// disable internal logger (it leaks URLs to stdout by default)
 	retryClient.Logger = nil
-	retryClient.RetryMax = retries
-	retryClient.HTTPClient.Transport = sharedTransport
+	retryClient.RetryMax = max(opts.Retries, 0)
+	retryClient.HTTPClient = opts.Client
 
-	return retryClient.StandardClient()
+	return retryClient
 }
 
-func JSONRequestAdvancedCustom(
+func JSONRequest(
 	ctx context.Context,
 	method string,
 	url string,
-	headers http.Header,
 	input any,
 	output any,
 	errorResp any,
-	retries int,
-	checkRetry retryablehttp.CheckRetry,
+	opts ...RequestOption,
 ) (int, error) {
+	options := &requestOptions{
+		Retries:    0,
+		CheckRetry: nil,
+		Headers:    make(http.Header),
+		Encoder:    defaultSerializer,
+		Decoder:    defaultSerializer,
+		Client:     cleanhttp.DefaultClient(),
+	}
+
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	var body io.Reader = http.NoBody
 
 	if input != nil {
@@ -64,7 +111,7 @@ func JSONRequestAdvancedCustom(
 		buf := pool.Get()
 		defer pool.Put(buf)
 
-		err := Encode(buf, input)
+		err := EncodeCustom(options.Encoder, buf, input)
 		if err != nil {
 			return 0, fmt.Errorf("failed to encode data: %w", err)
 		}
@@ -72,7 +119,7 @@ func JSONRequestAdvancedCustom(
 		body = buf
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+	req, err := retryablehttp.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return 0, NewRequestCreationError(method, url, body, err)
 	}
@@ -81,9 +128,9 @@ func JSONRequestAdvancedCustom(
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	cli := getClient(retries, checkRetry)
+	cli := buildClient(options)
 
-	CopyHeader(&req.Header, headers)
+	CopyHeader(&req.Header, options.Headers)
 
 	r, err := cli.Do(req)
 	if err != nil {
@@ -117,7 +164,7 @@ func JSONRequestAdvancedCustom(
 
 	tee := io.TeeReader(r.Body, buf)
 
-	err = Decode(tee, target)
+	err = DecodeCustom(options.Decoder, tee, target)
 	if err != nil {
 		return r.StatusCode, NewRequestParsingError(
 			method,
