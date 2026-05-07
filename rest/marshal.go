@@ -35,7 +35,9 @@ func UnmarshalCustom(u Unmarshaler, data []byte, v any) error {
 
 func UnmarshalCustomAsType[T any](u Unmarshaler, data []byte) (T, error) {
 	var dest T
+
 	err := u.Unmarshal(data, &dest)
+
 	return dest, err
 }
 
@@ -49,7 +51,9 @@ func DecodeCustom(d Decoder, r io.Reader, v any) error {
 
 func DecodeCustomAsType[T any](d Decoder, r io.Reader) (T, error) {
 	var dest T
+
 	err := d.Decode(r, &dest)
+
 	return dest, err
 }
 

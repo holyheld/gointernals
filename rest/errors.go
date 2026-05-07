@@ -155,7 +155,7 @@ type ValidationErrors []ValidationError
 func (e ValidationErrors) Error() string {
 	messages := strings.Builder{}
 
-	fmt.Fprintf(&messages, "%d validation errors occured\n", len(e))
+	fmt.Fprintf(&messages, "%d validation errors occurred\n", len(e))
 
 	for _, err := range e {
 		fmt.Fprintf(&messages, "%s\n", err)

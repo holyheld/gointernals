@@ -75,7 +75,7 @@ func getETagFromBytes[T ~[]byte](b T) (string, error) {
 	return fmt.Sprintf("W/\"%x\"", h.Sum(nil)), nil
 }
 
-// ServeOK serves [http.StatusOK] [Response] with provided payload
+// ServeOK serves [http.StatusOK] [Response] with provided payload.
 func ServeOK(w http.ResponseWriter, res any) {
 	JSONResponse(w, &Response{
 		Status:  APIResponseStatusOk,
