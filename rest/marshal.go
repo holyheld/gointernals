@@ -21,6 +21,10 @@ func Decode(r io.Reader, v any) error {
 	return DecodeCustom(defaultSerializer, r, v)
 }
 
+func DecodeAsType[T any](r io.Reader) (T, error) {
+	return DecodeCustomAsType[T](defaultSerializer, r)
+}
+
 func MarshalCustom(m Marshaler, v any) ([]byte, error) {
 	return m.Marshal(v)
 }
@@ -29,12 +33,24 @@ func UnmarshalCustom(u Unmarshaler, data []byte, v any) error {
 	return u.Unmarshal(data, v)
 }
 
+func UnmarshalCustomAsType[T any](u Unmarshaler, data []byte) (T, error) {
+	var dest T
+	err := u.Unmarshal(data, &dest)
+	return dest, err
+}
+
 func EncodeCustom(e Encoder, w io.Writer, data any) error {
 	return e.Encode(w, data)
 }
 
 func DecodeCustom(d Decoder, r io.Reader, v any) error {
 	return d.Decode(r, v)
+}
+
+func DecodeCustomAsType[T any](d Decoder, r io.Reader) (T, error) {
+	var dest T
+	err := d.Decode(r, &dest)
+	return dest, err
 }
 
 type Marshaler interface {
