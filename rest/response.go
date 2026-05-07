@@ -18,14 +18,15 @@ const (
 type ErrorCode string
 
 const (
-	InternalServerErrorCode ErrorCode = "INTERNAL_SERVER_ERROR"
-	BadRequestErrorCode     ErrorCode = "BAD_REQUEST"
-	NotFoundErrorCode       ErrorCode = "NOT_FOUND"
-	TimeoutErrorCode        ErrorCode = "TIMEOUT"
-	UnauthorizedErrorCode   ErrorCode = "UNAUTHORIZED"
-	ForbiddenErrorCode      ErrorCode = "FORBIDDEN"
-	InvalidSessionErrorCode ErrorCode = "INVALID_SESSION"
-	ConflictErrorCode       ErrorCode = "CONFLICT"
+	InternalServerErrorCode   ErrorCode = "INTERNAL_SERVER_ERROR"
+	BadRequestErrorCode       ErrorCode = "BAD_REQUEST"
+	NotFoundErrorCode         ErrorCode = "NOT_FOUND"
+	TimeoutErrorCode          ErrorCode = "TIMEOUT"
+	UnauthorizedErrorCode     ErrorCode = "UNAUTHORIZED"
+	ForbiddenErrorCode        ErrorCode = "FORBIDDEN"
+	InvalidSessionErrorCode   ErrorCode = "INVALID_SESSION"
+	ConflictErrorCode         ErrorCode = "CONFLICT"
+	ValidationFailedErrorCode ErrorCode = "VALIDATION_FAILED"
 )
 
 type Response struct {
@@ -74,12 +75,26 @@ func getETagFromBytes[T ~[]byte](b T) (string, error) {
 	return fmt.Sprintf("W/\"%x\"", h.Sum(nil)), nil
 }
 
-// ServeOKResponseJSON serves [http.StatusOK] [Response] with provided payload,
+// ServeOK serves [http.StatusOK] [Response] with provided payload
+func ServeOK(w http.ResponseWriter, res any) {
+	JSONResponse(w, &Response{
+		Status:  APIResponseStatusOk,
+		Payload: res,
+	}, http.StatusOK)
+}
+
+// ServeOKCached serves [http.StatusOK] [Response] with provided payload,
 // optionally handling ETag match
 //
 // Will serve [http.StatusNotModified] with no body if provided ETag is equal to computed,
 // otherwise will serve [http.StatusOK] with body.
-func ServeOKResponseJSON(w http.ResponseWriter, r *http.Request, res any) {
+func ServeOKCached(w http.ResponseWriter, r *http.Request, res any) {
+	if res == nil {
+		ServeOK(w, nil)
+
+		return
+	}
+
 	b, err := Marshal(res)
 	if err != nil {
 		JSONResponse(w, &Response{
@@ -115,14 +130,19 @@ func ServeOKResponseJSON(w http.ResponseWriter, r *http.Request, res any) {
 }
 
 func ServeBadRequestMalformedPayload(w http.ResponseWriter) {
-	ServeBadRequest(w, "Malformed payload")
+	ServeBadRequestWithPayload(w, "Malformed payload", nil)
 }
 
 func ServeBadRequest(w http.ResponseWriter, err string) {
+	ServeBadRequestWithPayload(w, err, nil)
+}
+
+func ServeBadRequestWithPayload(w http.ResponseWriter, err string, payload any) {
 	JSONResponse(w, &Response{
 		Status:    APIResponseStatusError,
 		ErrorCode: BadRequestErrorCode,
 		Error:     err,
+		Payload:   payload,
 	}, http.StatusBadRequest)
 }
 
@@ -140,4 +160,29 @@ func ServeNotFound(w http.ResponseWriter, err string) {
 		ErrorCode: NotFoundErrorCode,
 		Error:     err,
 	}, http.StatusNotFound)
+}
+
+func ServeUnauthorized(w http.ResponseWriter, err string) {
+	JSONResponse(w, &Response{
+		Status:    APIResponseStatusOk,
+		ErrorCode: UnauthorizedErrorCode,
+		Error:     err,
+	}, http.StatusUnauthorized)
+}
+
+func ServeForbidden(w http.ResponseWriter, err string) {
+	JSONResponse(w, &Response{
+		Status:    APIResponseStatusOk,
+		ErrorCode: ForbiddenErrorCode,
+		Error:     err,
+	}, http.StatusForbidden)
+}
+
+func ServeValidationFailed(w http.ResponseWriter, err ValidationErrors) {
+	JSONResponse(w, &Response{
+		Status:    APIResponseStatusError,
+		ErrorCode: ValidationFailedErrorCode,
+		Error:     "Validation failed",
+		Payload:   err,
+	}, http.StatusBadRequest)
 }

@@ -1,10 +1,13 @@
 package rest
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
+	"strings"
 )
 
 type phase = string
@@ -124,6 +127,58 @@ func (e *RequestFailedError) LogValue() slog.Value {
 
 	if e.responsePayload != "" {
 		attrs = append(attrs, slog.String("responsePayload", e.responsePayload))
+	}
+
+	return slog.GroupValue(attrs...)
+}
+
+type ValidationError struct {
+	Field  string          `json:"field"`
+	Reason string          `json:"reason"`
+	Meta   json.RawMessage `json:"meta,omitempty"`
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("validation failed on %s: %s", e.Field, e.Reason)
+}
+
+func (e *ValidationError) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("message", "Validation failed"),
+		slog.String("field", e.Field),
+		slog.String("reason", e.Reason),
+	)
+}
+
+type ValidationErrors []ValidationError
+
+func (e ValidationErrors) Error() string {
+	messages := strings.Builder{}
+
+	fmt.Fprintf(&messages, "%d validation errors occured\n", len(e))
+
+	for _, err := range e {
+		fmt.Fprintf(&messages, "%s\n", err)
+	}
+
+	return messages.String()
+}
+
+func (e ValidationErrors) Unwrap() []error {
+	res := make([]error, len(e))
+
+	for i, err := range e {
+		res[i] = &err
+	}
+
+	return res
+}
+
+func (e ValidationErrors) LogValue() slog.Value {
+	attrs := make([]slog.Attr, len(e))
+
+	for idx, err := range e {
+		attrs[idx] = slog.Any(strconv.FormatInt(int64(idx), 10), err)
 	}
 
 	return slog.GroupValue(attrs...)
