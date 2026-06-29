@@ -77,6 +77,7 @@ func buildClient(opts *requestOptions) *retryablehttp.Client {
 	retryClient.Logger = nil
 	retryClient.RetryMax = max(opts.Retries, 0)
 	retryClient.HTTPClient = opts.Client
+	retryClient.ErrorHandler = retryablehttp.PassthroughErrorHandler
 
 	return retryClient
 }
