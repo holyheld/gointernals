@@ -1,12 +1,10 @@
 package rest
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"strconv"
 	"strings"
 )
 
@@ -132,53 +130,51 @@ func (e *RequestFailedError) LogValue() slog.Value {
 	return slog.GroupValue(attrs...)
 }
 
-type ValidationError struct {
-	Field  string          `json:"field"`
-	Reason string          `json:"reason"`
-	Meta   json.RawMessage `json:"meta,omitempty"`
+type ValidationErrors map[string][]string
+
+func NewValidationErrors() ValidationErrors {
+	return make(ValidationErrors)
 }
 
-func (e *ValidationError) Error() string {
-	return fmt.Sprintf("validation failed on %s: %s", e.Field, e.Reason)
+func (v ValidationErrors) Add(field, message string) {
+	v[field] = append(v[field], message)
 }
 
-func (e *ValidationError) LogValue() slog.Value {
-	return slog.GroupValue(
-		slog.String("message", "Validation failed"),
-		slog.String("field", e.Field),
-		slog.String("reason", e.Reason),
-	)
+func (v ValidationErrors) CopyFrom(errs ValidationErrors) {
+	for field, group := range errs {
+		v[field] = append(v[field], group...)
+	}
 }
 
-type ValidationErrors []ValidationError
+func (v ValidationErrors) HasErrors() bool {
+	return len(v) > 0
+}
 
-func (e ValidationErrors) Error() string {
-	messages := strings.Builder{}
+func (v ValidationErrors) Error() string {
+	var summary []string
 
-	fmt.Fprintf(&messages, "%d validation errors occurred\n", len(e))
-
-	for _, err := range e {
-		fmt.Fprintf(&messages, "%s\n", err)
+	for field, msgs := range v {
+		summary = append(summary, fmt.Sprintf("%s: [%s]", field, strings.Join(msgs, ", ")))
 	}
 
-	return messages.String()
+	return fmt.Sprintf("validation failed: %s", strings.Join(summary, "; "))
 }
 
-func (e ValidationErrors) Unwrap() []error {
-	res := make([]error, len(e))
-
-	for i, err := range e {
-		res[i] = &err
-	}
-
-	return res
+func (v ValidationErrors) MarshalJSON() ([]byte, error) {
+	return Marshal(map[string][]string(v))
 }
 
-func (e ValidationErrors) LogValue() slog.Value {
-	attrs := make([]slog.Attr, len(e))
+func (v ValidationErrors) LogValue() slog.Value {
+	attrs := make([]slog.Attr, 0, len(v))
 
-	for idx, err := range e {
-		attrs[idx] = slog.Any(strconv.FormatInt(int64(idx), 10), err)
+	for field, msgs := range v {
+		anyMsgs := make([]any, len(msgs))
+
+		for i, m := range msgs {
+			anyMsgs[i] = m
+		}
+
+		attrs = append(attrs, slog.Any(field, anyMsgs))
 	}
 
 	return slog.GroupValue(attrs...)
