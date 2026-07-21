@@ -130,41 +130,41 @@ func (e *RequestFailedError) LogValue() slog.Value {
 	return slog.GroupValue(attrs...)
 }
 
-type ValidationErrors map[string][]string
+type ValidationError map[string][]string
 
-func NewValidationErrors() ValidationErrors {
-	return make(ValidationErrors)
+func NewValidationError() ValidationError {
+	return make(ValidationError)
 }
 
-func (v ValidationErrors) Add(field, message string) {
+func (v ValidationError) Add(field, message string) {
 	v[field] = append(v[field], message)
 }
 
-func (v ValidationErrors) CopyFrom(errs ValidationErrors) {
+func (v ValidationError) CopyFrom(errs ValidationError) {
 	for field, group := range errs {
 		v[field] = append(v[field], group...)
 	}
 }
 
-func (v ValidationErrors) HasErrors() bool {
+func (v ValidationError) HasErrors() bool {
 	return len(v) > 0
 }
 
-func (v ValidationErrors) Error() string {
-	var summary []string
+func (v ValidationError) Error() string {
+	summary := make([]string, 0, len(v))
 
 	for field, msgs := range v {
 		summary = append(summary, fmt.Sprintf("%s: [%s]", field, strings.Join(msgs, ", ")))
 	}
 
-	return fmt.Sprintf("validation failed: %s", strings.Join(summary, "; "))
+	return "validation failed: " + strings.Join(summary, "; ")
 }
 
-func (v ValidationErrors) MarshalJSON() ([]byte, error) {
+func (v ValidationError) MarshalJSON() ([]byte, error) {
 	return Marshal(map[string][]string(v))
 }
 
-func (v ValidationErrors) LogValue() slog.Value {
+func (v ValidationError) LogValue() slog.Value {
 	attrs := make([]slog.Attr, 0, len(v))
 
 	for field, msgs := range v {

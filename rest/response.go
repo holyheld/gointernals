@@ -178,11 +178,6 @@ func ServeForbidden(w http.ResponseWriter, err string) {
 	}, http.StatusForbidden)
 }
 
-func ServeValidationFailed(w http.ResponseWriter, err ValidationErrors) {
-	JSONResponse(w, &Response{
-		Status:    APIResponseStatusError,
-		ErrorCode: ValidationFailedErrorCode,
-		Error:     "Validation failed",
-		Payload:   err,
-	}, http.StatusBadRequest)
+func ServeValidationFailed(w http.ResponseWriter, err error) {
+	ServeBadRequestWithPayload(w, "Validation failed", err)
 }
