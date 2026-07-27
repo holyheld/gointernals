@@ -178,6 +178,27 @@ func ServeForbidden(w http.ResponseWriter, err string) {
 	}, http.StatusForbidden)
 }
 
+func ServeForbiddenCustom(w http.ResponseWriter, code ErrorCode, err string) {
+	JSONResponse(w, &Response{
+		Status:    APIResponseStatusOk,
+		ErrorCode: code,
+		Error:     err,
+	}, http.StatusForbidden)
+}
+
 func ServeValidationFailed(w http.ResponseWriter, err error) {
 	ServeBadRequestWithPayload(w, "Validation failed", err)
+}
+
+// ServeGone responds with [http.StatusGone] that the resource is not found,
+// and the condition is likely to be permanent.
+//
+// The main benefit of using [ServeGone] over [ServeNotFound] is that
+// clients can cache [http.StatusGone] and don't send request again.
+func ServeGone(w http.ResponseWriter, err string) {
+	JSONResponse(w, &Response{
+		Status:    APIResponseStatusError,
+		ErrorCode: NotFoundErrorCode,
+		Error:     err,
+	}, http.StatusGone)
 }
