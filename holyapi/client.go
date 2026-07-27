@@ -90,8 +90,7 @@ func (c *Client) RequestWithRetry(
 	)
 }
 
-// RequestWithOptions performs a JSON request to the endpoint (expects response to be JSON if
-// successResponse arg is provided).
+// RequestWithOptions performs a request to the endpoint.
 func (c *Client) RequestWithOptions(
 	ctx context.Context,
 	method string,
