@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/hashicorp/go-cleanhttp"
 	"github.com/hashicorp/go-retryablehttp"
@@ -41,6 +43,10 @@ func NewClient(baseURL holder.Holder[string], opts ...Option) *Client {
 	return c
 }
 
+// Request performs a simple JSON request to the endpoint (expects response to be JSON if
+// successResponse arg is provided).
+//
+// Deprecated: Use [Client.RequestWithOptions] instead for better flexibility.
 func (c *Client) Request(
 	ctx context.Context,
 	method string,
@@ -59,6 +65,9 @@ func (c *Client) Request(
 	)
 }
 
+// RequestWithRetry allows [Client.Request] to have explicit retry policy.
+//
+// Deprecated: Use [Client.RequestWithOptions] instead for better readability.
 func (c *Client) RequestWithRetry(
 	ctx context.Context,
 	method string,
@@ -81,6 +90,8 @@ func (c *Client) RequestWithRetry(
 	)
 }
 
+// RequestWithOptions performs a JSON request to the endpoint (expects response to be JSON if
+// successResponse arg is provided).
 func (c *Client) RequestWithOptions(
 	ctx context.Context,
 	method string,
@@ -90,6 +101,34 @@ func (c *Client) RequestWithOptions(
 	opts ...rest.RequestOption,
 ) (int, error) {
 	return c.requestInternal(ctx, method, path, body, successResponse, opts...)
+}
+
+// FormDataRequest performs a multipart/formdata request to the endpoint
+// (expects response to be JSON if successResponse arg is provided).
+func (c *Client) FormDataRequest(
+	ctx context.Context,
+	method string,
+	path string,
+	body io.Reader,
+	successResponse any,
+	contentType string,
+	opts ...rest.RequestOption,
+) (int, error) {
+	allOpts := make([]rest.RequestOption, 0, len(opts)+2)
+	allOpts = append(allOpts,
+		rest.WithBody(body),
+		rest.WithContentType(contentType),
+	)
+	allOpts = append(allOpts, opts...)
+
+	return c.requestInternal(
+		ctx,
+		method,
+		path,
+		nil,
+		successResponse,
+		allOpts...,
+	)
 }
 
 func (c *Client) requestInternal(
@@ -110,14 +149,14 @@ func (c *Client) requestInternal(
 
 	errorResp := &ResponseError{}
 
-	baseURL, err := url.Parse(c.baseURL.Get())
+	fullPath, err := buildURL(c.baseURL.Get(), path)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse base url (raw=%s): %w", c.baseURL.Get(), err)
-	}
-
-	pathURL, err := baseURL.Parse(path)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse path url (raw=%s): %w", path, err)
+		return 0, fmt.Errorf(
+			"failed to parse url (base=%s, path=%s): %w",
+			c.baseURL.Get(),
+			path,
+			err,
+		)
 	}
 
 	allOpts := make([]rest.RequestOption, 0, len(opts)+2)
@@ -125,10 +164,10 @@ func (c *Client) requestInternal(
 	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts, rest.WithAdditionalHeaders(prepareHeader(ctx)))
 
-	status, err := rest.JSONRequest(
+	status, err := rest.Request(
 		ctx,
 		method,
-		pathURL.String(),
+		fullPath,
 		body,
 		successResp,
 		errorResp,
@@ -153,7 +192,7 @@ func (c *Client) requestInternal(
 			ErrorDescription: errorResp.ErrorDescription,
 			Payload:          errorResp.Payload,
 			Meta: ResponseMeta{
-				URL:    pathURL.String(),
+				URL:    fullPath,
 				Method: method,
 				Status: status,
 			},
@@ -175,4 +214,24 @@ func prepareHeader(ctx context.Context) http.Header {
 	}
 
 	return out
+}
+
+func buildURL(baseURL, pathURL string) (string, error) {
+	if !strings.HasSuffix(baseURL, "/") {
+		baseURL += "/"
+	}
+
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse base URL (raw=%s): %w", baseURL, err)
+	}
+
+	pathURL = strings.TrimPrefix(pathURL, "/")
+
+	finalURL, err := base.Parse(pathURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse relative path (raw=%s): %w", pathURL, err)
+	}
+
+	return finalURL.String(), nil
 }
