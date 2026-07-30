@@ -30,3 +30,19 @@ func ChanSlice[T any](vs []T) <-chan T {
 func Chunk[T any](s []T, chunkSize int) [][]T {
 	return slices.Collect(slices.Chunk(s, chunkSize))
 }
+
+// Flatten returns flatten slice of two-dimensional source.
+func Flatten[T any](matrix [][]T) []T {
+	// Pre-calculate total capacity to avoid repeated dynamic allocations
+	var totalLen int
+	for _, row := range matrix {
+		totalLen += len(row)
+	}
+
+	result := make([]T, 0, totalLen)
+	for _, row := range matrix {
+		result = append(result, row...)
+	}
+
+	return result
+}
